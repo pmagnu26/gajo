@@ -1,0 +1,37 @@
+GAJO - conversor de archivos y capturas de pantalla, sin internet
+================================================================
+
+INSTALAR
+1. Descomprime TODO el .zip en una carpeta (clic derecho > Extraer todo).
+2. Doble clic en "Instalar Gajo.bat".
+3. Responde las preguntas (S o N). La primera vez descarga unos 600 MB
+   (1 GB si eliges LibreOffice) y puede tardar 10 a 30 minutos. Si Windows
+   pide permiso para instalar Python, ffmpeg, Pandoc o LibreOffice, acepta.
+   Instalado completo ocupa entre 1,6 y 2,3 GB; lo que el PC ya tenga no
+   se vuelve a descargar.
+4. Al terminar aparece el ícono naranjo de Gajo junto al reloj.
+
+Necesita Windows 10 u 11 con internet durante la instalación. Después
+funciona sin internet: nada se sube a ningún servidor.
+
+CÓMO SE USA
+- Arrastra un archivo y, sin soltar el mouse, toca una tecla:
+    Shift = convertir formato    Ctrl = herramientas    Alt = acciones
+  Suelta sobre la opción. El original nunca se modifica.
+- Ctrl+Impr Pant: captura una zona de la pantalla y dibuja encima.
+  Clic derecho y arrastrar mueve un dibujo; Ctrl+rueda cambia su grosor;
+  Ctrl+C copia, Ctrl+S guarda. Shift+Impr Pant guarda la pantalla completa.
+  Todas las capturas quedan en el Historial (menú del ícono), donde se
+  pueden copiar otra vez o seguir editando.
+- Escanear desde foto: foto de un documento + Ctrl > ESCANEAR. Endereza la
+  hoja, quita sombras y la pasa a PDF (varias fotos = un PDF).
+- Leer texto (OCR, sin internet): imagen + Shift > TEXTO; PDF escaneado +
+  Ctrl > OCR (queda con texto seleccionable y buscable); en la captura de
+  pantalla, Ctrl+T copia el texto de la zona.
+- Menú del ícono junto al reloj: cómo se usa, cambiar atajos, salir.
+
+Si Lightshot está instalado, usa el mismo atajo: ciérralo y deshabilítalo en
+Administrador de tareas > Aplicaciones de arranque.
+
+DESINSTALAR
+Doble clic en "Desinstalar Gajo.bat".
