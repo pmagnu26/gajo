@@ -766,8 +766,10 @@ class Overlay(QWidget):
                 p.setBrush(ORANGE)
                 for q in self.sel_handles().values():
                     p.drawRect(QRectF(q.x() - 3.5, q.y() - 3.5, 7, 7))
-            dpr = self.shot.devicePixelRatio()
+            dpr = self.shot.devicePixelRatio() * self.session.scale
             label = f"{round(r.width() * dpr)} × {round(r.height() * dpr)}"
+            if self.session.scale > 1:
+                label += "  (al doble)"
             self._pill(p, QPointF(r.left(), r.top() - 8), label, anchor_bottom=True)
         tip = ("Arrastra para elegir la zona   ·   Esc para salir" if not self.sel else
                "Clic derecho y arrastra un dibujo para moverlo   ·   Ctrl+rueda sobre él cambia su grosor   ·   "
@@ -804,14 +806,16 @@ class Overlay(QWidget):
         """La zona elegida con los dibujos, a resolucion real de la pantalla."""
         self.commit_text()
         dpr = self.shot.devicePixelRatio()
+        k = self.session.scale
         r = self.sel.normalized()
         src = QRect(round(r.x() * dpr), round(r.y() * dpr), round(r.width() * dpr), round(r.height() * dpr))
-        img = self.shot.toImage().copy(src).convertToFormat(QImage.Format.Format_ARGB32)
+        img = upscale(self.shot.toImage().copy(src), k).convertToFormat(QImage.Format.Format_ARGB32)
         img.setDevicePixelRatio(1)
         p = QPainter(img)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         p.setRenderHint(QPainter.RenderHint.TextAntialiasing)
-        p.scale(dpr, dpr)
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        p.scale(dpr * k, dpr * k)  # los dibujos se pintan de nuevo a este tamano: quedan nitidos
         p.translate(-r.topLeft())
         for s in self.shapes:
             S.draw_shape(p, s, self.blur_ctx())
@@ -881,6 +885,19 @@ class Overlay(QWidget):
         self.session.finish("guardada", out)
 
 
+def upscale(img: QImage, k: int) -> QImage:
+    """Agranda la captura k veces con Lanczos y un enfoque suave (para el modo 'al doble')."""
+    if k <= 1:
+        return img
+    from PIL import ImageFilter
+    from PIL.Image import Resampling
+    from .panels.base import pil_to_qimage, qimage_to_pil
+    im = qimage_to_pil(img)
+    im = im.resize((im.width * k, im.height * k), Resampling.LANCZOS)
+    im = im.filter(ImageFilter.UnsharpMask(radius=1.2, percent=60, threshold=2))
+    return pil_to_qimage(im)
+
+
 class CaptureSession(QObject):
     """Congela todos los monitores y abre una capa en cada uno."""
     done = Signal(str, object)  # "copiada" | "guardada" | "cancelada", ruta
@@ -891,6 +908,7 @@ class CaptureSession(QObject):
         self.color = settings.get("captura_color", COLORS[0])
         self.width = settings.get("captura_grosor", 4)
         self.text_bg = bool(settings.get("captura_texto_fondo", False))
+        self.scale = 2 if settings.get("captura_al_doble") else 1
         self.active: Overlay | None = None
         self.save_thread = None
         self.restore_id: str | None = None

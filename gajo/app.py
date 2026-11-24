@@ -127,6 +127,10 @@ class GajoApp(QObject):
         menu.addAction("Historial de capturas…", self.open_history)
         menu.addAction("Copiar última captura", self.copy_last)
         menu.addAction("Cambiar atajos de captura…", self.change_shortcuts)
+        self.act_doble = menu.addAction("Capturas al doble de resolución")
+        self.act_doble.setCheckable(True)
+        self.act_doble.setChecked(bool(self.config.get("captura_al_doble", False)))
+        self.act_doble.toggled.connect(self._toggle_double)
         self._label_capture_actions()
         menu.addSeparator()
         menu.addAction("Cómo se usa", self.show_help)
@@ -176,6 +180,13 @@ class GajoApp(QObject):
     def _label_capture_actions(self) -> None:
         self.act_zona.setText(f"Capturar zona ({key_label(self.shortcuts['zona'])})")
         self.act_full.setText(f"Guardar pantalla completa ({key_label(self.shortcuts['pantalla_completa'])})")
+
+    def _toggle_double(self, on: bool) -> None:
+        self.config["captura_al_doble"] = on
+        save_config(self.config)
+        self.notify("Capturas al doble" if on else "Capturas a tamaño normal",
+                    "Las capturas saldrán con el doble de ancho y alto; los dibujos y textos quedan nítidos."
+                    if on else "Las capturas saldrán del mismo tamaño que la pantalla.")
 
     def change_shortcuts(self) -> None:
         from .atajos import open_dialog
@@ -261,7 +272,11 @@ class GajoApp(QObject):
         if not path:
             return
         out = Path(path)
-        shot.save(str(out), "JPG" if out.suffix.lower() in (".jpg", ".jpeg") else "PNG", 95)
+        img = shot.toImage()
+        if self.config.get("captura_al_doble"):
+            from .capture import upscale
+            img = upscale(img, 2)
+        img.save(str(out), "JPG" if out.suffix.lower() in (".jpg", ".jpeg") else "PNG", 95)
         self.config["captura_carpeta"] = str(out.parent)
         save_config(self.config)
         self.last_output = out
