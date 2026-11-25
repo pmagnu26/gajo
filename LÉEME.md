@@ -36,10 +36,13 @@ Todo ocurre en este PC: nada se sube a internet.
 ## Captura de pantalla (reemplaza a Lightshot)
 
 - **Ctrl+Impr Pant**: congela la pantalla; arrastra para elegir la zona (se ajusta con sus manillas).
-  Herramientas: mover, lápiz, línea, flecha, rectángulo, marcador, texto y goma; color y grosor
+  Herramientas: mover, lápiz, línea, polilínea, flecha, rectángulo, marcador, texto y goma; color y grosor
   (la rueda del mouse cambia el grosor, o el tamaño de la goma).
 - Cada dibujo es un objeto propio: **clic derecho y arrastrar** lo mueve con cualquier herramienta;
   con **Mover** (V) se elige y se estira desde sus puntas; **Supr** lo borra; doble clic edita un texto.
+- **Polilínea** (O): clic en cada vértice; doble clic, Enter o clic derecho termina; clic en el primer
+  punto la cierra; Retroceso quita el último vértice; Shift deja el tramo a 0/45/90°. Con Mover se
+  estira desde cualquier vértice.
 - La **goma** corta solo lo que toca: parte trazos y líneas en dos sin borrar el resto.
 - **Grosor con la rueda**: mientras dibujas, la rueda cambia el grosor de ese trazo en vivo. Ya dibujado,
   **Ctrl+rueda** con el cursor encima cambia solo ese dibujo (en un texto, el tamaño de letra).
@@ -59,10 +62,21 @@ Todo ocurre en este PC: nada se sube a internet.
   arrastrar una miniatura a otra app. **Copiar última captura** en el menú la recupera de un clic.
   Se guarda en `%LOCALAPPDATA%\Gajo\historial` (imagen final, zona sin dibujos y los dibujos en JSON),
   60 días y máximo 500 (`historial_dias` / `historial_max` en config.json).
-- Atajos: letras V, P, L, A, R, M, T, E para cambiar de herramienta. Los atajos globales se cambian
+- Atajos: letras V, P, L, O, A, R, M, T, D, E para cambiar de herramienta. Los atajos globales se cambian
   desde el menú del ícono → **Cambiar atajos de captura…** (clic en el atajo y presionar la nueva
   combinación; si otro programa la usa, avisa y deja la anterior). Si otro programa los tiene tomados
   al partir, Gajo avisa y los toma apenas se liberan.
+
+## Agrandar con IA (Real-ESRGAN)
+
+Imagen + **Ctrl → IA ×2** o **IA ×4**: la agranda con Real-ESRGAN (`realesrgan-ncnn-vulkan`), que
+quita ruido y bloques de JPG y define bordes; deja `nombre-IA-x2.jpg` al lado. Las fotos usan el modelo
+general (`realesrgan-x4plus`); las capturas y gráficos PNG, el de líneas limpias (`realesr-animevideov3`).
+El programa no va en el instalador: la primera vez se baja del lanzamiento oficial (45 MB, se verifica su
+huella SHA-256) a `%LOCALAPPDATA%\Gajo\realesrgan`. Necesita tarjeta de video con Vulkan (casi todas,
+también las integradas). Una foto de 960×720 tarda ≈5 s al cuádruple con una RTX 4060.
+Si ya está bajado, la opción **Capturas al doble de resolución** también usa la IA (≈1 s); si no, Lanczos.
+Motor en `gajo/upscale.py`.
 
 ## Instalar en otros PC
 

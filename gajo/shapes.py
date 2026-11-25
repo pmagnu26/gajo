@@ -1,6 +1,6 @@
 """Dibujos de la captura como objetos independientes (se mueven, estiran y borran por separado).
 
-Cada objeto es un dict: kind ('pen', 'marker', 'line', 'arrow', 'rect', 'text'), color,
+Cada objeto es un dict: kind ('pen', 'marker', 'line', 'poly', 'arrow', 'rect', 'text'), color,
 width, pts (lista de (x, y)) y, en texto, text/size/w/h. Coordenadas en pixeles logicos.
 """
 from __future__ import annotations
@@ -82,6 +82,15 @@ def draw_shape(p: QPainter, s: dict, blur=None) -> None:
     elif k == "line":
         p.setPen(QPen(color, w, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
         p.drawLine(QPointF(*pts[0]), QPointF(*pts[1]))
+    elif k == "poly":
+        p.setPen(QPen(color, w, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        path = QPainterPath(QPointF(*pts[0]))
+        for q in pts[1:]:
+            path.lineTo(QPointF(*q))
+        if s.get("closed"):
+            path.closeSubpath()
+        p.drawPath(path)
     elif k == "arrow":
         a, b = QPointF(*pts[0]), QPointF(*pts[1])
         ang = math.atan2(b.y() - a.y(), b.x() - a.x())
@@ -121,7 +130,7 @@ def draw_shape(p: QPainter, s: dict, blur=None) -> None:
 
 def handles(s: dict) -> list[Pt]:
     """Puntos que se pueden arrastrar para estirar el objeto."""
-    if s["kind"] in ("line", "arrow"):
+    if s["kind"] in ("line", "arrow", "poly"):
         return list(s["pts"])
     if s["kind"] == "rect":
         (x0, y0), (x1, y1) = s["pts"]
@@ -130,7 +139,7 @@ def handles(s: dict) -> list[Pt]:
 
 
 def set_handle(s: dict, i: int, q: Pt) -> None:
-    if s["kind"] in ("line", "arrow"):
+    if s["kind"] in ("line", "arrow", "poly"):
         s["pts"][i] = q
     elif s["kind"] == "rect":
         (x0, y0), (x1, y1) = s["pts"]
@@ -170,6 +179,14 @@ def dist_seg(p: Pt, a: Pt, b: Pt) -> float:
     return math.hypot(p[0] - (ax + t * dx), p[1] - (ay + t * dy))
 
 
+def poly_edges(s: dict) -> list[tuple[Pt, Pt]]:
+    pts = s["pts"]
+    edges = list(zip(pts, pts[1:]))
+    if s.get("closed") and len(pts) > 2:
+        edges.append((pts[-1], pts[0]))
+    return edges
+
+
 def _rect_edges(s: dict) -> list[tuple[Pt, Pt]]:
     c = handles(s)
     return [(c[i], c[(i + 1) % 4]) for i in range(4)]
@@ -193,6 +210,8 @@ def hit(s: dict, p: Pt, tol: float = 6.0) -> bool:
         return dist_seg(p, *s["pts"]) <= reach + extra
     if k == "rect":
         return any(dist_seg(p, a, b) <= reach for a, b in _rect_edges(s))
+    if k == "poly":
+        return any(dist_seg(p, a, b) <= reach for a, b in poly_edges(s))
     return False
 
 
@@ -306,6 +325,12 @@ def erase(shapes: list[dict], c: Pt, r: float) -> tuple[list[dict], bool]:
                 out += rest
             else:
                 out.append(s)
+        elif k == "poly":
+            if any(dist_seg(c, a, b) <= r + s["width"] / 2 for a, b in poly_edges(s)):
+                changed = True
+                out += _erase_poly(s, c, r)
+            else:
+                out.append(s)
         elif k == "text":
             if bbox(s).adjusted(-r, -r, r, r).contains(QPointF(*c)):
                 changed = True
@@ -314,3 +339,28 @@ def erase(shapes: list[dict], c: Pt, r: float) -> tuple[list[dict], bool]:
         else:
             out.append(s)
     return out, changed
+
+
+def _erase_poly(s: dict, c: Pt, r: float) -> list[dict]:
+    """Corta la polilinea donde pasa la goma; los tramos que quedan siguen siendo polilineas."""
+    pts = list(s["pts"]) + ([s["pts"][0]] if s.get("closed") and len(s["pts"]) > 2 else [])
+    runs: list[list[Pt]] = []
+    run: list[Pt] = [pts[0]]
+    for a, b in zip(pts, pts[1:]):
+        span = _circle_interval(a, b, c, r + s["width"] / 2)
+        if span is None:
+            run.append(b)
+            continue
+        t0, t1 = span
+        at = lambda t: (a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t)  # noqa: E731
+        if t0 > 0:
+            run.append(at(t0))
+        runs.append(run)
+        run = [at(t1), b] if t1 < 1 else [b]
+    runs.append(run)
+    out = []
+    for rn in runs:
+        rn = [q for i, q in enumerate(rn) if i == 0 or math.hypot(q[0] - rn[i - 1][0], q[1] - rn[i - 1][1]) > 0.5]
+        if len(rn) >= 2 and sum(math.hypot(b[0] - a[0], b[1] - a[1]) for a, b in zip(rn, rn[1:])) > 3:
+            out.append({**s, "pts": rn, "closed": False})
+    return out

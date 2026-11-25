@@ -8,6 +8,7 @@ from typing import Callable
 
 from . import engines as E
 from . import ocr
+from . import upscale
 from .tools import norm_ext
 
 KINDS = {
@@ -133,6 +134,10 @@ def tool_ops(paths: list[Path]) -> list[Op]:
         ]
         if not many:
             ops.append(_panel("OCULTAR", "Tapar caras, textos o zonas privadas", "image_panels:RedactPhoto"))
+        ops += [
+            Op("IA ×2", "Agrandar al doble con IA, más nítida", upscale.enlarge2),
+            Op("IA ×4", "Agrandar 4 veces con IA, más nítida", upscale.enlarge),
+        ]
         ops.append(Op("CREAR PDF", "Juntar en un PDF, una página por imagen", E.imgs_to_pdf, multi=True))
         if many:
             ops.append(_panel("COLLAGE", "Armar un collage", "image_panels:CollagePanel"))

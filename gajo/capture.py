@@ -31,6 +31,8 @@ TOOLS = [  # (clave, icono, nombre, tecla)
     ("move", "pointer", "Mover y estirar (V) · también con clic derecho", "V"),
     ("pen", "pen", "Lápiz (P)", "P"),
     ("line", "line", "Línea (L) · Shift: recta a 45°", "L"),
+    ("poly", "polyline", "Polilínea (O): clic en cada vértice · doble clic, Enter o clic derecho termina · "
+     "clic en el primer punto la cierra · Retroceso quita el último · Shift: 0/45/90°", "O"),
     ("arrow", "arrow", "Flecha (A) · Shift: recta a 45°", "A"),
     ("rect", "rect", "Rectángulo (R) · Shift: cuadrado", "R"),
     ("marker", "highlight", "Marcador (M)", "M"),
@@ -160,6 +162,7 @@ class Overlay(QWidget):
         self.drag: tuple | None = None
         self.mouse = QPointF(-100, -100)
         self.shift_down = False
+        self.poly_on = False  # hay una polilinea a medio dibujar (su ultimo punto sigue al cursor)
         self.flash: tuple[str, QPointF, float] | None = None
         self._wheel_last: tuple[int, float] = (-1, 0.0)
         self.editor: QPlainTextEdit | None = None
@@ -248,6 +251,19 @@ class Overlay(QWidget):
         self.width_btn.update()
 
     # ------------------------------------------------------------ ajustes
+    def finish_poly(self) -> None:
+        """Termina la polilinea en curso: suelta el punto que seguia al cursor."""
+        if not self.poly_on:
+            return
+        self.poly_on = False
+        s = self.shapes[-1]
+        s["pts"].pop()
+        if len(s["pts"]) < 2 or all(q == s["pts"][0] for q in s["pts"]):
+            self.shapes.pop()
+            if self.undo_stack:
+                self.undo_stack.pop()
+        self.update()
+
     def set_tool(self, key: str | None) -> None:
         self.commit_text()
         self.tool = None if key == self.tool else key
@@ -373,6 +389,7 @@ class Overlay(QWidget):
         return super().eventFilter(obj, ev)
 
     def commit_text(self, cancel: bool = False) -> None:
+        self.finish_poly()
         if not self.editor:
             return
         ed, self.editor = self.editor, None
@@ -427,6 +444,9 @@ class Overlay(QWidget):
             if self.tool == "text":
                 return
         self.session.activate(self)
+        if self.poly_on:
+            self._poly_click(pos, e)
+            return
         if e.button() == Qt.MouseButton.RightButton:
             i = S.top_hit(self.shapes, _pt(pos))
             if i >= 0:
@@ -485,6 +505,13 @@ class Overlay(QWidget):
             self._ortho = None
             self._erase(pos)
             return
+        if self.tool == "poly":
+            self.snapshot()
+            self.shapes.append({"kind": "poly", "color": self.color, "width": self.width,
+                                "pts": [_pt(pos), _pt(pos)]})
+            self.poly_on = True
+            self.update()
+            return
         self.snapshot()
         kind = self.tool
         pts = [_pt(pos)] if kind in ("pen", "marker", "blur") else [_pt(pos), _pt(pos)]
@@ -493,10 +520,35 @@ class Overlay(QWidget):
         self.drag = ("draw",)
         self.update()
 
+    def _poly_click(self, pos: QPointF, e) -> None:
+        s = self.shapes[-1]
+        if e.button() == Qt.MouseButton.RightButton:
+            self.finish_poly()
+            return
+        if e.button() != Qt.MouseButton.LeftButton:
+            return
+        if len(s["pts"]) >= 4 and _dist(QPointF(*s["pts"][0]), pos) <= 9:  # clic en el primer punto: cierra
+            s["closed"] = True
+            s["pts"][-1] = s["pts"][-2]
+            self.finish_poly()
+            return
+        shift = bool(e.modifiers() & Qt.KeyboardModifier.ShiftModifier) or self.shift_down
+        q = S.snap(s["pts"][-2], _pt(pos)) if shift else _pt(pos)
+        s["pts"][-1] = q  # el punto del clic queda fijo y uno nuevo sigue al cursor
+        if math.hypot(q[0] - s["pts"][-2][0], q[1] - s["pts"][-2][1]) >= 2:
+            s["pts"].append(q)
+        self.update()
+
     def mouseMoveEvent(self, e) -> None:
         pos = e.position()
         self.mouse = pos
         shift = bool(e.modifiers() & Qt.KeyboardModifier.ShiftModifier) or self.shift_down
+        if self.poly_on and self.drag is None:
+            s = self.shapes[-1]
+            q = _pt(pos)
+            s["pts"][-1] = S.snap(s["pts"][-2], q) if shift else q
+            self.update()
+            return
         d = self.drag
         if d is None:
             self._update_cursor(pos)
@@ -575,6 +627,9 @@ class Overlay(QWidget):
         self.update()
 
     def mouseDoubleClickEvent(self, e) -> None:
+        if self.poly_on:
+            self.finish_poly()
+            return
         i = S.top_hit(self.shapes, _pt(e.position()))
         if i >= 0 and self.shapes[i]["kind"] == "text":
             self.open_editor(e.position(), i)
@@ -696,6 +751,21 @@ class Overlay(QWidget):
     def keyPressEvent(self, e) -> None:
         if e.key() == Qt.Key.Key_Shift:
             self.shift_down = True
+            if self.poly_on:
+                s = self.shapes[-1]
+                s["pts"][-1] = S.snap(s["pts"][-2], _pt(self.mouse))
+                self.update()
+            return
+        if self.poly_on and e.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Escape):
+            self.finish_poly()
+            return
+        if self.poly_on and e.key() == Qt.Key.Key_Backspace:
+            s = self.shapes[-1]
+            if len(s["pts"]) > 2:
+                s["pts"].pop(-2)
+                self.update()
+            else:
+                self.finish_poly()
             return
         if e.matches(QKeySequence.StandardKey.Copy):
             self.copy()
@@ -889,6 +959,15 @@ def upscale(img: QImage, k: int) -> QImage:
     """Agranda la captura k veces con Lanczos y un enfoque suave (para el modo 'al doble')."""
     if k <= 1:
         return img
+    if k == 2:  # si la IA ya esta en el PC, ella agranda (bordes y letras mas limpios)
+        from .upscale import upscale_qimage
+        QApplication.setOverrideCursor(QCursor(Qt.CursorShape.WaitCursor))
+        try:
+            ai = upscale_qimage(img)
+        finally:
+            QApplication.restoreOverrideCursor()
+        if ai is not None and ai.width() == img.width() * 2:
+            return ai
     from PIL import ImageFilter
     from PIL.Image import Resampling
     from .panels.base import pil_to_qimage, qimage_to_pil

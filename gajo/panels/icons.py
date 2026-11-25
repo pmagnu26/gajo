@@ -154,6 +154,12 @@ def _draw(name: str, p: QPainter) -> None:
         p.drawPath(path)
     elif name == "line":
         p.drawLine(QPointF(4, 16), QPointF(16, 4))
+    elif name == "polyline":
+        path = QPainterPath(QPointF(3, 16))
+        for pt in ((7, 6), (13, 13), (17, 4)):
+            path.lineTo(QPointF(*pt))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawPath(path)
     elif name == "eraser":
         path = QPainterPath(QPointF(9, 4))
         for pt in ((17, 12), (12, 17), (7, 17), (3, 13)):
